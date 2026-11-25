@@ -20,7 +20,7 @@
       });
     }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
-    targets.forEach((target, index) => {
+    targets.forEach((target) => {
       target.classList.add('motion-reveal');
       observer.observe(target);
     });

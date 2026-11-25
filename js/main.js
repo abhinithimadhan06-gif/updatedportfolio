@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   initMainSectionOrder();
   initEditorialCursor();
-  initPaletteThemeSwitcher();
   initCommissionForm();
   initPortfolioEnvelope();
   initHeaderAndScroll();
@@ -51,7 +50,7 @@ function initEditorialCursor() {
     document.body.classList.add('editorial-cursor-enabled');
 
     const now = performance.now();
-    if (now - lastSmokeAt > 55 && smokeLayer.childElementCount < 12) {
+    if (now - lastSmokeAt > 100 && smokeLayer.childElementCount < 6) {
       lastSmokeAt = now;
       const puff = document.createElement('span');
       puff.className = 'editorial-cursor-smoke';
@@ -157,32 +156,6 @@ function initMainSectionOrder() {
   });
 }
 
-function initPaletteThemeSwitcher() {
-  const swatches = document.querySelectorAll('.swatch-item');
-  const colorThemes = {
-    '#8E1426': { crimson: '#8E1426', crimsonLight: '#A82036', stamp: '#8E1426', name: 'Carmine Crimson' },
-    '#C9A46A': { crimson: '#A27B42', crimsonLight: '#C9A46A', stamp: '#A27B42', name: 'Atelier Gold' },
-    '#1E1E1E': { crimson: '#1E1E1E', crimsonLight: '#444444', stamp: '#1E1E1E', name: 'Soft Charcoal' },
-    '#B7B1A7': { crimson: '#756F65', crimsonLight: '#958F85', stamp: '#756F65', name: 'Warm Stone' },
-    '#F7F4EC': { crimson: '#706957', crimsonLight: '#918A76', stamp: '#706957', name: 'Soft Ivory' }
-  };
-
-  swatches.forEach((swatch) => {
-    swatch.addEventListener('click', () => {
-      swatches.forEach((item) => item.classList.remove('active'));
-      swatch.classList.add('active');
-
-      const theme = colorThemes[swatch.getAttribute('data-color')];
-      if (!theme) return;
-
-      document.documentElement.style.setProperty('--crimson-accent', theme.crimson);
-      document.documentElement.style.setProperty('--crimson-light', theme.crimsonLight);
-      document.documentElement.style.setProperty('--stamp-red', theme.stamp);
-      showAtelierToast(`Atelier Accent Shifted: ${theme.name}`);
-    });
-  });
-}
-
 function showAtelierToast(message) {
   let toast = document.getElementById('atelierToast');
   if (!toast) {
@@ -221,9 +194,11 @@ function showAtelierToast(message) {
 function initCommissionForm() {
   const form = document.getElementById('commissionForm');
   if (!form) return;
+  let isSubmitting = false;
 
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (isSubmitting) return;
 
     let isValid = true;
     const validateField = (id, isFieldValid) => {
@@ -231,27 +206,56 @@ function initCommissionForm() {
       const group = input.closest('.form-group');
       group.classList.toggle('has-error', !isFieldValid);
       isValid = isFieldValid && isValid;
-      return input;
     };
 
-    const nameInput = validateField('clientName', Boolean(document.getElementById('clientName').value.trim()));
-    const emailInput = validateField('clientEmail', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('clientEmail').value.trim()));
-    const serviceInput = validateField('serviceType', Boolean(document.getElementById('serviceType').value));
-    const messageInput = validateField('projectDetails', document.getElementById('projectDetails').value.trim().length >= 8);
+    validateField('clientName', Boolean(document.getElementById('clientName').value.trim()));
+    validateField('clientEmail', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('clientEmail').value.trim()));
+    const phoneValue = document.getElementById('clientPhone').value.trim();
+    const phoneDigits = phoneValue.replace(/\D/g, '');
+    validateField('clientPhone', /^[+\d().\-\s]+$/.test(phoneValue) && phoneDigits.length >= 7 && phoneDigits.length <= 15);
+    validateField('serviceType', Boolean(document.getElementById('serviceType').value));
+    validateField('projectDetails', document.getElementById('projectDetails').value.trim().length >= 8);
 
     if (!isValid) return;
 
-    const subject = `Fashion commission inquiry from ${nameInput.value.trim()}`;
-    const body = [
-      `Name: ${nameInput.value.trim()}`,
-      `Email: ${emailInput.value.trim()}`,
-      `Service: ${serviceInput.options[serviceInput.selectedIndex].text}`,
-      '',
-      'Project brief:',
-      messageInput.value.trim()
-    ].join('\n');
+    isSubmitting = true;
+    const submitButton = form.querySelector('button[type="submit"]');
+    const submitLabel = submitButton.querySelector('span');
+    submitButton.disabled = true;
+    submitButton.setAttribute('aria-busy', 'true');
+    submitLabel.textContent = 'SENDING...';
 
-    window.location.href = `mailto:abhinithimadhan@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    try {
+      const formData = Object.fromEntries(new FormData(form).entries());
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || `Contact form submission failed with status ${response.status}.`);
+      }
+    } catch (error) {
+      console.error('Unable to submit the contact form.', error);
+      const errorMessage = error instanceof SyntaxError || error instanceof TypeError
+        ? 'Email service unavailable. Use Netlify Dev or the deployed site.'
+        : error.message || 'Message not sent. Please try again.';
+      showAtelierToast(`${errorMessage} Your details are saved.`);
+      isSubmitting = false;
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
+      submitLabel.textContent = 'SEND →';
+      return;
+    }
+
+    form.reset();
+    form.querySelectorAll('.form-group.has-error').forEach((group) => group.classList.remove('has-error'));
+    showAtelierToast('Your message has been sent successfully! Returning home...');
+    window.setTimeout(() => {
+      window.location.assign('index.html');
+    }, 2200);
   });
 }
 
