@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   initMainSectionOrder();
   initEditorialCursor();
-  initCommissionForm();
   initPortfolioEnvelope();
   initHeaderAndScroll();
   initMobileNavigation();
