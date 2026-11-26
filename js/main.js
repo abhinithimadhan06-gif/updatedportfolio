@@ -191,6 +191,7 @@ function showAtelierToast(message) {
 }
 
 
+
 function initCommissionForm() {
   const form = document.getElementById('commissionForm');
   if (!form) return;
