@@ -190,16 +190,24 @@ function showAtelierToast(message) {
   }, 2400);
 }
 
+
 function initCommissionForm() {
   const form = document.getElementById('commissionForm');
   if (!form) return;
+
   let isSubmitting = false;
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+
     if (isSubmitting) return;
 
+    // Spam protection
+    const honeypot = form.querySelector('[name="bot-field"]');
+    if (honeypot && honeypot.value.trim()) return;
+
     let isValid = true;
+
     const validateField = (id, isFieldValid) => {
       const input = document.getElementById(id);
       const group = input.closest('.form-group');
@@ -207,56 +215,85 @@ function initCommissionForm() {
       isValid = isFieldValid && isValid;
     };
 
-    validateField('clientName', Boolean(document.getElementById('clientName').value.trim()));
-    validateField('clientEmail', /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(document.getElementById('clientEmail').value.trim()));
-    const phoneValue = document.getElementById('clientPhone').value.trim();
-    const phoneDigits = phoneValue.replace(/\D/g, '');
-    validateField('clientPhone', /^[+\d().\-\s]+$/.test(phoneValue) && phoneDigits.length >= 7 && phoneDigits.length <= 15);
-    validateField('serviceType', Boolean(document.getElementById('serviceType').value));
-    validateField('projectDetails', document.getElementById('projectDetails').value.trim().length >= 8);
+    const name = document.getElementById('clientName').value.trim();
+    const email = document.getElementById('clientEmail').value.trim();
+    const phone = document.getElementById('clientPhone').value.trim();
+    const serviceSelect = document.getElementById('serviceType');
+    const message = document.getElementById('projectDetails').value.trim();
+
+    const phoneDigits = phone.replace(/\D/g, '');
+
+    validateField('clientName', name.length > 0);
+    validateField(
+      'clientEmail',
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    );
+    validateField(
+      'clientPhone',
+      /^[+\d().\-\s]+$/.test(phone) &&
+      phoneDigits.length >= 7 &&
+      phoneDigits.length <= 15
+    );
+    validateField('serviceType', Boolean(serviceSelect.value));
+    validateField('projectDetails', message.length >= 8);
 
     if (!isValid) return;
 
+    // Check EmailJS
+    if (!window.emailjs) {
+      showAtelierToast('Email service unavailable. Please try again later.');
+      return;
+    }
+
     isSubmitting = true;
+
     const submitButton = form.querySelector('button[type="submit"]');
     const submitLabel = submitButton.querySelector('span');
+
     submitButton.disabled = true;
     submitButton.setAttribute('aria-busy', 'true');
     submitLabel.textContent = 'SENDING...';
 
     try {
-      const formData = Object.fromEntries(new FormData(form).entries());
-      const response = await fetch(form.action, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-      const result = await response.json();
+      const templateParams = {
+        name: name,
+        email: email,
+        phone: phone,
+        service: serviceSelect.options[serviceSelect.selectedIndex].text,
+        message: message
+      };
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || `Contact form submission failed with status ${response.status}.`);
-      }
+      await emailjs.send(
+        'service_i6c4aut',
+        'template_m97wfzb',
+        templateParams,
+        '89dNjVKNZ3ruKiY_7'
+      );
+
+      form.reset();
+
+      form.querySelectorAll('.form-group.has-error').forEach((group) => {
+        group.classList.remove('has-error');
+      });
+
+      showAtelierToast('Your enquiry has been sent successfully!');
+
     } catch (error) {
-      console.error('Unable to submit the contact form.', error);
-      const errorMessage = error instanceof SyntaxError || error instanceof TypeError
-        ? 'Email service unavailable. Use Netlify Dev or the deployed site.'
-        : error.message || 'Message not sent. Please try again.';
-      showAtelierToast(`${errorMessage} Your details are saved.`);
+      console.error('EmailJS submission error:', error);
+
+      showAtelierToast(
+        'Message not sent. Please try again or contact us directly.'
+      );
+
+    } finally {
       isSubmitting = false;
       submitButton.disabled = false;
       submitButton.removeAttribute('aria-busy');
       submitLabel.textContent = 'SEND →';
-      return;
     }
-
-    form.reset();
-    form.querySelectorAll('.form-group.has-error').forEach((group) => group.classList.remove('has-error'));
-    showAtelierToast('Your message has been sent successfully! Returning home...');
-    window.setTimeout(() => {
-      window.location.assign('index.html');
-    }, 2200);
   });
 }
+
 
 function initHeaderAndScroll() {
   const header = document.getElementById('topNavBar');
